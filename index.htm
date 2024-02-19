@@ -65,14 +65,53 @@
 
             const requestData = async function() {
                 const counties = await d3.json("data/wa_county_boundaries_2.geojson");
+                const county_EVs = await d3.json("data/ev_data_short.json");
 
                 // geojson stuff 
                 let projection = d3.geoIdentity()
                     .reflectY(true)
-                    .fitSize([mapWidth, mapHeight - 150], counties);
+                    .fitSize([mapWidth - 100, mapHeight - 150], counties);
                 let path = d3.geoPath().projection(projection);
 
+                // for scales and reference
+                statewide = {
+                    "totals": [],
+                    "makes": [],
+                    "years": [], 
+                    // "ranges" : [],
+                    "types": [],
+                    "clean_el": []
+                }
+
+                // adding county-specific data from EV dataset
+                counties.features.forEach( c => { 
+                    target_name = c.properties["NAME"];
+                    target = county_EVs[target_name];
+
+                    // appending to geojson feature property info
+                    c.properties["total"] = target["total"];
+                    c.properties["makes"] = target["makes"];
+                    // maybe later its a lot of # for no rzn
+                    // c.properties["ranges"] = target["ranges"]
+                    c.properties["years"] = target["years"];
+                    c.properties["types"] = target["types"];
+                    c.properties["clean_el"] = target["clean_eligibilities"];
+
+                    // adding to state-wide data
+                    statewide["totals"].push(target["total"]);
+                });
+
+                // double checking
                 console.log(counties.features);
+                console.log(county_EVs);
+
+                // some quick scale stuff
+                const minmax = d3.extent(Object.values(statewide["totals"]));
+                console.log(minmax);
+
+                let colorScale = d3.scaleQuantize()
+                    .domain(minmax)
+                    .range(d3.schemeBlues[5]);
 
                 map.selectAll("path.county").data(counties.features)
                     .join("path")
@@ -81,7 +120,7 @@
                     .style('transform', 'scaleY(1.4)')
                     .style("stroke", "white") 
                     .style("stroke-width", 0.5)
-                    .style("fill", "#141428")
+                    .style("fill", d => colorScale( d.properties.total ));
             }
 
             requestData();

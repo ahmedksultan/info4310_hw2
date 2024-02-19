@@ -121,6 +121,23 @@
                     .style("stroke", "white") 
                     .style("stroke-width", 0.5)
                     .style("fill", d => colorScale( d.properties.total ));
+
+                //Plotting EV Stations
+                stations = await d3.csv("data/alt_fuel_stations.csv", d3.autoType);
+
+                stations.forEach( d => {
+                    d.Position = projection( [d.Longitude, d.Latitude] );          
+                });
+                console.log(stations); 
+
+                map.selectAll("circle").data(stations)
+                    .join("circle")
+                    .attr("r", 3)
+                    .attr("fill", "green")
+                    .attr("opacity", 0.7)
+                    .attr("cx", d => d.Position[0])
+                    .attr("cy", d => d.Position[1]);
+
             }
 
             requestData();

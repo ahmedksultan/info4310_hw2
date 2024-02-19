@@ -43,21 +43,52 @@ print(len(valid_counties))
 for county in valid_counties:
     county_data[county] = { 
         "total" : 0,
-        "brand" : {},
+        "makes" : {},
         "ranges" : [],
         "years" : {},
-        "clean_eligibility" : {} 
+        "types" : {},
+        "clean_eligibilities" : {}
     }
 
 for row in evData["data"]:
     county = row[9]
-    print(row[13], row[14], row[16], row[18], row[17])
+    # print(row[13], row[14], row[16], row[18], row[17])
     if county in valid_counties:
         county_data[county]["total"] += 1
+        
+        r_year = row[13]
+        r_make = row[14] 
+        r_type = row[16]
+        r_range = row[18]
+        r_cleanEl = row[17]
 
+        if r_year not in county_data[county]["years"].keys():
+            county_data[county]["years"][r_year] = 1
+        else:
+            county_data[county]["years"][r_year] += 1
+
+        if r_make not in county_data[county]["makes"].keys():
+            county_data[county]["makes"][r_make] = 1
+        else:
+            county_data[county]["makes"][r_make] += 1
+
+        if r_type not in county_data[county]["types"].keys():
+            county_data[county]["types"][r_type] = 1
+        else:
+            county_data[county]["types"][r_type] += 1
+
+        if r_cleanEl not in county_data[county]["clean_eligibilities"].keys():
+            county_data[county]["clean_eligibilities"][r_cleanEl] = 1
+        else:
+            county_data[county]["clean_eligibilities"][r_cleanEl] += 1
+
+        county_data[county]["ranges"].append(r_range)
+        
 cd_sorted = dict(sorted(county_data.items(), key=lambda item : item[1]["total"], reverse=True))
+# print(cd_sorted)
 
-print(cd_sorted)
+with open("data/ev_data_short.json", "w") as f:
+    json.dump(cd_sorted, f)
 
 
 

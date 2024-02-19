@@ -1,0 +1,90 @@
+<html>
+    <head>
+        <title>INFO 4310 - HW2</title>
+
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <script src="https://d3js.org/topojson.v2.min.js"></script>
+        <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+        <style>
+            .header {
+                text-align: center;
+                font-family: "Helvetica";
+            }
+
+            .page-title {
+                font-size: 72px;
+                padding-top: 0.5em;
+                margin: 0;
+            }
+
+            svg {
+                padding-left: 5vw;
+            }
+
+            .container {
+                display: flex;
+                flex-direction: row;
+            }
+
+            h2 {
+                font-family: "Helvetica";
+                text-align: center;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="header">
+            <h1 class="page-title">EVs in Washington</h1>
+            <p>prepared by Ahmed Sultan (aks264) and Sydney Wan (ssw73), for Professor Rzeszotarski's INFO 4310 class</p>
+        </div>
+
+        <div class="container">
+            <div>
+                <h2>Blah blah blah</h2>
+                <svg id="choropleth" height="500" width="900"></svg>
+            </div>
+        </div>
+
+        <script>
+            // SVG A : CHOROPLETH MAP
+            const svg_a = d3.select("#choropleth");
+            const width_a = svg_a.attr("width");
+            const height_a = svg_a.attr("height");
+
+            const margin = {
+                top: 10, bottom: 10, right: 10, left: 10
+            }
+
+            const mapWidth = width_a - margin.left - margin.right;
+            const mapHeight = height_a - margin.top - margin.bottom;
+
+            const map = svg_a.append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")");
+
+            const requestData = async function() {
+                const counties = await d3.json("data/wa_county_boundaries_2.geojson");
+
+                // geojson stuff 
+                let projection = d3.geoIdentity()
+                    .reflectY(true)
+                    .fitSize([mapWidth, mapHeight - 150], counties);
+                let path = d3.geoPath().projection(projection);
+
+                console.log(counties.features);
+
+                map.selectAll("path.county").data(counties.features)
+                    .join("path")
+                    .attr("class", "county")
+                    .attr("d", path)
+                    .style('transform', 'scaleY(1.4)')
+                    .style("stroke", "white") 
+                    .style("stroke-width", 0.5)
+                    .style("fill", "#141428")
+            }
+
+            requestData();
+        </script>
+    </body>
+</html>

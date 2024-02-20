@@ -31,6 +31,18 @@
                 font-family: "Helvetica";
                 text-align: center;
             }
+            button {
+                font-family: "Helvetica";
+                background-color: white;
+                color: #445;
+                border: 1px solid gray;
+                padding: 5px;
+                padding-left: 15px;
+                padding-right: 15px;
+                font-size: medium;
+                border-style: ridge;
+                margin-bottom: 5px;
+            }
         </style>
     </head>
 
@@ -43,6 +55,7 @@
         <div class="container">
             <div>
                 <h2>Blah blah blah</h2>
+                <div id="toggle-map-view"></div>
                 <svg id="choropleth" height="500" width="800" style="border:1px solid gray;"></svg>
             </div>
         </div>
@@ -53,6 +66,9 @@
             const requestData = async function() {
                 const counties = await d3.json("data/wa_county_boundaries_2.geojson");
                 const county_EVs = await d3.json("data/ev_data_short.json");
+
+                const zips = await d3.json("data/wa_washington_zip_codes_geo.min.json");
+                console.log(zips);
 
                 // SVG A : CHOROPLETH MAP
                 let svg_a = d3.select("#choropleth")
@@ -69,19 +85,27 @@
                 let map = svg_a.append("g")
                                 .attr("transform", "translate("+margin.left+","+margin.top+")");
 
+                // attempt to implement zoom feature
+                var zoom = d3.zoom()
+                  .scaleExtent([1,20])
+                  .translateExtent([[-50,-50],[mapWidth+50,mapHeight+50]])
+                  .on("zoom", zoomMap);
+
+                svg_a.call(zoom);
+               
                 // geojson stuff 
-                let projection = d3.geoMercator()
-                    .fitSize([mapWidth - 10, mapHeight - 50], counties);
+                projection = d3.geoMercator()
+                            .fitSize([mapWidth - 10, mapHeight - 50], counties);
                 let path = d3.geoPath().projection(projection);
 
-                // for scales and reference
-                statewide = {
-                    "totals": [],
-                    "makes": [],
-                    "years": [], 
-                    // "ranges" : [],
-                    "types": [],
-                    "clean_el": []
+                 // for scales and reference
+                 statewide = {
+                            "totals": [],
+                            "makes": [],
+                            "years": [], 
+                            // "ranges" : [],
+                            "types": [],
+                            "clean_el": []
                 }
 
                 // adding county-specific data from EV dataset
@@ -108,45 +132,39 @@
 
                 // some quick scale stuff
                 //const minmax = d3.extent(Object.values(statewide["totals"]));
-                const minmax = d3.extent(counties.features, d => d.properties.total)
-                console.log(minmax);
+                const minmax = d3.extent(counties.features, d => d.properties.total);
 
-                // let colorScale = d3.scaleSequential()
-                //     .domain(minmax)
-                //     .interpolator(d3.interpolateViridis);
-                    //.range(d3.schemeBlues[5]);
-
-                let colorScale = d3.scaleOrdinal()
-                                    .domain([0, 1000, 5000, 10000, 20000, 100000])
+                let colorScale = d3.scaleLinear()
+                                    .domain([0, 200, 500, 1000, 20000, 100000])
                                     .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
 
+                //County polgyons
+                map.selectAll(".county").data(counties.features)
+                            .enter()
+                            .append("path")
+                            .attr("class", "county")
+                            .attr("d", path)
+                            .style("stroke", "white") 
+                            .style("stroke-width", 0.5)
+                            .style("fill", d => colorScale( d.properties.total ));
 
+                //Zip polygons
+                map.selectAll(".zip").data(zips.features)
+                            .enter()
+                            .append("path")
+                            .attr("class", "zip")
+                            .attr("d", path)
+                            .style("stroke", "white") 
+                            .style("stroke-width", 0.5)
+                            .style("fill", "blue");
 
-                map.selectAll("path.county").data(counties.features)
-                    .join("path")
-                    .attr("class", "county")
-                    .attr("d", path)
-                    .style("stroke", "white") 
-                    .style("stroke-width", 0.5)
-                    .style("fill", d => colorScale( d.properties.total ));
-
-
-                // attempt to implement zoom feature
-                var zoom = d3.zoom()
-                  .scaleExtent([1,20])
-                  .translateExtent([[-50,-50],[mapWidth+50,mapHeight+50]])  // to lock to edges
-                  .on("zoom", mapZoomed);
-
-                svg_a.call(zoom);
-
-                // //Plotting EV Stations
-                stations = await d3.csv("data/alt_fuel_stations.csv", d3.autoType);
+                 // Plot EV station data
+                 stations = await d3.csv("data/alt_fuel_stations.csv", d3.autoType);
 
                 stations.forEach( d => {
-                    d.Position = projection( [d.Longitude, d.Latitude] );          
-                });
-
-                let circles = map.selectAll("circle").data(stations)
+                        d.Position = projection( [d.Longitude, d.Latitude] );          
+                    });
+                    let circles = map.selectAll("circle").data(stations)
                                 .join("circle")
                                 .attr("r", 4)
                                 .attr("fill", "green")
@@ -154,10 +172,51 @@
                                 .attr("cx", d => d.Position[0])
                                 .attr("cy", d => d.Position[1]);
 
-            
-                function mapZoomed() {      
-                     map.attr("transform", d3.event.transform);
-                     circles.attr("r", 4 / d3.event.transform.k  );
+                let toggle = "county";
+
+                //option to toggle between county and zipcode view
+                const mapViews = ["county", "zip"];
+                
+                mapViews.forEach(d => {
+                    let title = "County View"
+                    if (d === "zip") {
+                        title = "Zip View"
+
+                    }
+
+                    d3.select("div#toggle-map-view")
+                        .append("button")
+                        .attr("class", "category")
+                        .attr("id", d)
+                        .text(title)
+                        .on("click", function () {
+                            d3.selectAll("button.category").style('background-color', "white").style("text-decoration", "none");
+                            d3.select(this).style("background-color", "#9ecae1").style("text-decoration", "underline");
+                            updateMap(d);
+
+                        });
+                    d3.select(`button#county`).style("background-color", "#9ecae1").style("text-decoration", "underline");
+
+
+                })
+                
+                updateMap(toggle);
+
+                function updateMap(view) {
+                    toggle = view;
+                                          
+                    map.selectAll(".county")
+                            .attr("visibility", (toggle === "county") ? "visible" : "hidden");
+                    map.selectAll(".zip")
+                            .attr("visibility", (toggle === "zip") ? "visible" : "hidden");
+ 
+                }
+
+               
+
+                function zoomMap() {      
+                        map.attr("transform", d3.event.transform);
+                        circles.attr("r", 4 / d3.event.transform.k  );
                 }
             }
             requestData();

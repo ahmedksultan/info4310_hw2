@@ -49,6 +49,12 @@
                 display: flex;
                 flex-direction: column;
             }
+            .gridlines line {
+                stroke: #bbb;
+            }
+            .gridlines .domain {
+                stroke: none;
+            }
 
         </style>
     </head>
@@ -71,7 +77,8 @@
                 
             </div>
             <div class ="container2">
-                <svg id="barchart" height="300" width="400" style="border:1px solid gray;"></svg>
+                <h4 id="charttitle"></h4>
+                <svg id="barchart" height="400" width="500" style="border:1px solid gray;"></svg>
             </div>
         </div>
 
@@ -165,7 +172,7 @@
                             .style("fill", d => colorScale( d.properties.total ))
                             .on('mouseover', mouseEntersState)
                             .on('mouseout', mouseLeavesState)
-                            // .on('click', updateBarChart);
+                            .on('click', updateBarChart);
 
                 //Zip polygons
                 map.selectAll(".zip").data(zips.features)
@@ -271,55 +278,101 @@
                 }
 
                 // Create dynamic bar chart to show car make by county/zip
-                // const svg_b = d3.select("#barchart");
-                // const barchart_width = svg_b.attr("width");
-                // const barchart_height = svg_b.attr("height");
-                // const chartMargin = { top: 20, right: 20, bottom: 20, left: 20 };
-                // const chartWidth = barchart_width - margin.left - margin.right;
-                // const chartHeight = barchart_height - margin.top - margin.bottom;
-                // const barchart = svg_b.append("g")
-                //                         .attr("transform", "translate(" + chartMargin.left + "," + chartMargin.top + ")");
+                const svg_b = d3.select("#barchart");
+                const barchart_width = svg_b.attr("width");
+                const barchart_height = svg_b.attr("height");
+                const chartTitle = d3.select("#charttitle");
+                const chartMargin = { top: 20, right: 20, bottom: 20, left: 20 };
+                const chartWidth = barchart_width - chartMargin.left - chartMargin.right;
+                const chartHeight = barchart_height - chartMargin.top - chartMargin.bottom;
+                const barchart = svg_b.append("g")
+                                        .attr("transform", "translate(" + chartMargin.left + "," + chartMargin.top + ")");
 
-                // function updateBarChart() {
-                //     let zone = null;
-                //     if (d3.select(this)._groups[0][0] === window) {
-                //             zone = d3.select(counties.features[8]);
-                //             return;
+                function updateBarChart() {
+                    let zone = null;
+                    if (d3.select(this)._groups[0][0] === window) {
+                            zone = d3.select(counties.features[8]);
+                            return;                     
                         
-                        
-                //     }
-                //     else {
-                //         zone = d3.select(this)._groups[0][0].__data__;
-                //     }
+                    }
+                    else {
+                        zone = d3.select(this)._groups[0][0].__data__;
+                    }
       
-                   
-                //     console.log(zone);
-                //     let makes = zone.properties.makes;
-                //     let makeScale = d3.scalePoint()
-                //                       .domain(Object.keys(makes))
-                //                       .range([40, chartWidth - 20]);
-                //     let countScale = d3.scaleLinear()
-                //                         .domain([0, Math.min(Object.values(makes))])
-                //                         .range([chartHeight, 0]);
+                    svg_b.html(""); //clear chart
+                    chartTitle.html(""); //clear title
+
+                    console.log(zone);
+                    let makes = zone.properties.makes;
+     
+                    let makeScale = d3.scalePoint()
+                                      .domain(Object.keys(makes))
+                                      .range([40, chartWidth - 20]);
+                    let countScale = d3.scaleSymlog() //not sure if we should do scaleLinear or Symlog
+                                        .domain([Math.max(...Object.values(makes)), 0])
+                                        .range([0, chartHeight - 40]);
+
+                    let leftAxis = d3.axisLeft(countScale).tickFormat(function(d) { return d; });
+                    svg_b.append('g')
+                            .attr('transform', `translate(${chartMargin.left + 15},${chartMargin.top})`)
+                            .call(leftAxis);
+                    
+                    let leftGrid = d3.axisLeft(countScale).tickFormat('').tickSize(-chartWidth)
+                    svg_b.append('g')
+                            .attr('transform', `translate(${chartMargin.left + 15},${chartMargin.top})`)
+                            .attr('class', 'gridlines')
+                            .call(leftGrid);
+                    
+                    let bottomAxis = d3.axisBottom(makeScale)
+                    svg_b.append('g')
+                            .attr('transform', `translate(${chartMargin.left},${chartHeight + chartMargin.top - 40})`)
+                            .call(bottomAxis)
+                            .selectAll("text")
+                            .style("text-anchor", "end")
+                            .attr("transform", "rotate(-65)");
 
 
-                //     let leftAxis = d3.axisLeft(countScale).tickFormat('');
-                //     svg_b.append('g')
-                //             .attr('transform', `translate(${chartMargin.left},${chartMargin.top})`)
-                //             .call(leftAxis);
-                    
-                //     let leftGrid = d3.axisLeft(countScale).tickFormat('').tickSize(-chartWidth)
-                //     svg_b.append('g')
-                //             .attr('transform', `translate(${chartMargin.left},${chartMargin.top})`)
-                //             .attr('class', 'gridlines')
-                //             .call(leftGrid);
-                    
-                //     let bottomAxis = d3.axisBottom(makeScale)
-                //     svg_b.append('g')
-                //             .attr('transform', `translate(${chartMargin.left},${chartHeight + chartMargin.top})`)
-                //             .call(bottomAxis);
-                // }
-                // updateBarChart();
+                    for (const [key, value] of Object.entries(makes)) {
+
+                        var bars = svg_b.selectAll('.bar')
+                            .data([key, value]); 
+
+                        bars.enter()
+                            .append('rect')
+                            .attr('class', 'bar' + key)
+                            .attr('fill', "#6baed6")
+                            .attr("stroke", "white")
+                            .attr("stroke-width", 0.5)
+                            .attr('x', d => makeScale(key) + 10)
+                            .attr('y', d => chartHeight - 25)
+                            .attr('height', 0)
+                            .attr('width', d => (chartWidth - 30) / Object.keys(makes).length)
+                            .transition() // Add transition
+                            .duration(900) 
+                            .attr('y', d => countScale(value) - 25)
+                            .attr('height', d => chartHeight - countScale(value));
+
+                        bars
+                            .transition()
+                            .duration(900)
+                            .attr('fill', "blue")
+                            .attr('x', d => makeScale(key) + 5)
+                            .attr('y', d => countScale(value) + 20)
+                            .attr('height', d => chartHeight - countScale(value));
+
+                        bars.exit()
+                            .transition()
+                            .duration(500)
+                            .attr('height', 0)
+                            .remove();
+                    };
+
+                    chartTitle.append("text")
+                      .attr("x", chartWidth / 2)
+                      .attr("y", chartHeight / 2)
+                      .text("Car Make BreaKdown in " + zone.properties.NAME);
+                }
+                updateBarChart();
 
                 //option to toggle between county and zipcode view
                 const mapViews = ["county", "zip"];
@@ -398,8 +451,6 @@
                             .attr("visibility", (toggle === "county") ? "visible" : "hidden");
                     map.selectAll(".zip")
                             .attr("visibility", (toggle === "zip") ? "visible" : "hidden");
-
-                    //drawLegend("#colorLegend", colorScale, colorScaleThresholds);
  
                 }
     

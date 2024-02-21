@@ -18,9 +18,9 @@
                 margin: 0;
             }
 
-            svg {
+            /* svg {
                 padding-left: 5vw;
-            }
+            } */
 
             .container {
                 display: flex;
@@ -32,7 +32,6 @@
                 text-align: center;
             }
             button {
-                font-family: "Helvetica";
                 background-color: white;
                 color: #445;
                 border: 1px solid gray;
@@ -42,6 +41,13 @@
                 font-size: medium;
                 border-style: ridge;
                 margin-bottom: 5px;
+            }
+            text {
+                font-family: "Helvetica";
+            }
+            .map {
+                display: flex;
+                flex-direction: column;
             }
 
         </style>
@@ -56,8 +62,13 @@
         <div class="container">
             <div>
                 <h2>Blah blah blah</h2>
-                <div id="toggle-map-view"></div>
-                <svg id="choropleth" height="500" width="700" style="border:1px solid gray;"></svg>
+                <div class="map">
+                    <div id="toggle-map-view"></div>
+                    <svg id="colorLegend" height="150" width="200" style="margin-bottom:10px; padding-left: 20px;"> </svg>
+                    <svg id="choropleth" height="500" width="800" style="border:1px solid gray;"></svg>
+
+                </div>
+                
             </div>
             <div class ="container2">
                 <svg id="barchart" height="300" width="400" style="border:1px solid gray;"></svg>
@@ -91,7 +102,7 @@
 
                 // attempt to implement zoom feature
                 var zoom = d3.zoom()
-                  .scaleExtent([1,20])
+                  .scaleExtent([1,10])
                   .translateExtent([[-50,-50],[mapWidth+50,mapHeight+50]])
                   .on("zoom", zoomMap);
 
@@ -138,8 +149,9 @@
                 //const minmax = d3.extent(Object.values(statewide["totals"]));
                 const minmax = d3.extent(counties.features, d => d.properties.total);
 
+                let colorScaleThresholds = [0, 100, 300, 1000, 5000, 100000];
                 let colorScale = d3.scaleLinear()
-                                    .domain([0, 200, 500, 1000, 20000, 100000])
+                                    .domain(colorScaleThresholds)
                                     .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
 
                 //County polgyons
@@ -334,7 +346,49 @@
 
 
                 })
+
+                //drawLegend
+                const svg_c = d3.select("#colorLegend");
+                let legend = svg_c.append("g")
+                var size = 10;
                 
+
+                function updateLegend(thresholds) {
+
+                    legend.selectAll("squares")
+                    .data(thresholds)
+                    .enter()
+                    .append("rect")
+                        .attr("x", 0)
+                        .attr("y", function(d,i){ return 30 + i*(size+12)})
+                        .attr("width", size)
+                        .attr("height", size)
+                        .style("fill", function(d){ return colorScale(d)});
+
+                    legend.selectAll("legend_names")
+                        .data(thresholds)
+                        .enter()
+                        .append("text")
+                            .attr("x", 5 + size* 1.2)
+                            .attr("y", function(d,i){ return 30 + i*(size+12) + (size/2)})
+                            .style("fill", d => colorScale(d) )
+                            .text(function(d, i){ 
+                                let val1 = d3.format(",")(thresholds[i].toString()) ;
+            
+                                if (i === 5) {
+                                    return val1.concat("+");
+                                }
+                                else {
+                                    let val2 = d3.format(",")(thresholds[i+1].toString()) ;
+                                    return val1.concat(" - ", val2);
+                                }})
+                            .attr("text-anchor", "left")
+                            .style("alignment-baseline", "middle")
+                            .style("font-size", "15px");
+                    
+                    
+                }
+                updateLegend(colorScaleThresholds)
                 updateMap(toggle);
 
                 function updateMap(view) {
@@ -344,6 +398,8 @@
                             .attr("visibility", (toggle === "county") ? "visible" : "hidden");
                     map.selectAll(".zip")
                             .attr("visibility", (toggle === "zip") ? "visible" : "hidden");
+
+                    //drawLegend("#colorLegend", colorScale, colorScaleThresholds);
  
                 }
     

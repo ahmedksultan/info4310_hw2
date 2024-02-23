@@ -69,7 +69,7 @@
         </div>
         <div class="container">
             <div class="map-holder">
-                <h2>Electric vehicles in Washington, by county</h2>
+                <h2>Electric vehicles in Washington, by region</h2>
                 <div class="toggle-holder" height="500" width="200" >
                     <button id="countyview">County view</button>
                     <button id="zipview">Zipcode view</button>
@@ -225,7 +225,7 @@
                     .attr("fill", d => cColorScale( d.properties.total ))
                     .on('mouseover', mouseEntersState)
                     .on('mouseout', mouseLeavesState)
-                    // .on('click', updateBarChart);
+                    .on('click', updateBarChart);
                 
                 map.selectAll("path.underzip").data(counties.features)
                     .join("path")
@@ -306,6 +306,103 @@
                     .style("font-family", "Helvetica")
                     .style("font-size", "10px")
                     .style("font-style", "italic");
+                
+                const barchart_width = tooltip.attr("width") - 20;
+                const barchart_height = tooltip.attr("height") - 50;
+                const chartTitle = d3.select("#charttitle");
+                const chartMargin = { top: 100, right: 20, bottom: 20, left: 20 };
+                const chartWidth = barchart_width - chartMargin.left - chartMargin.right - 15;
+                const chartHeight = barchart_height - chartMargin.top - chartMargin.bottom;
+                const barchart = tooltip.append("g")
+                                        .attr("transform", "translate(" + chartMargin.left + "," + chartMargin.top + ")");
+
+                function updateBarChart() {
+                    let zone = null;
+                    if (d3.select(this)._groups[0][0] === window) {
+                            zone = d3.select(counties.features[8]);
+                            return;                     
+                        
+                    }
+                    else {
+                        zone = d3.select(this)._groups[0][0].__data__;
+                    }
+      
+                    barchart.html(""); //clear chart
+                    chartTitle.html(""); //clear title
+
+                    console.log(zone);
+                    let makes = zone.properties.makes;
+                    console.log(makes);
+                    filtered_makes = Object.fromEntries(Object.entries(makes)
+                                            .sort(([, a], [, b]) => b - a)                    
+                                            .slice(0,5)); //doesn't limit entries with tie
+     
+                    let makeScale = d3.scalePoint()
+                                      .domain(Object.keys(filtered_makes))
+                                      .range([40, chartWidth - 40]);
+                    let countScale = d3.scaleLinear() //not sure if we should do scaleLinear or Symlog
+                                        .domain([0, Math.max(...Object.values(filtered_makes))])
+                                        .range([chartHeight, 0]);
+
+                    let leftAxis = d3.axisLeft(countScale).tickFormat(function(d) { return d; });
+                    barchart.append('g')
+                            .attr('transform', `translate(${chartMargin.left},${chartMargin.bottom})`)
+                            .attr("stroke", "#e3e3e3")
+                            .call(leftAxis);
+
+                    let leftGrid = d3.axisLeft(countScale).tickFormat('').tickSize(-chartWidth).ticks(10)
+                    barchart.append('g')
+                            .attr('transform', `translate(${chartMargin.left + 15},${chartMargin.bottom})`)
+                            .attr('class', 'gridlines')
+                            .attr("fill", "#e3e3e3")
+                            .call(leftGrid);
+                    
+                    let bottomAxis = d3.axisBottom(makeScale)
+                    barchart.append('g')
+                            .attr('transform', `translate(${chartMargin.left},${chartHeight + chartMargin.bottom})`)
+                            .call(bottomAxis)
+                            .selectAll("text")
+                            .style("text-anchor", "end")
+                            .attr("fill", "#e3e3e3")
+                            .attr("transform", "rotate(-45)");
+
+
+                    for (const [key, value] of Object.entries(filtered_makes)) {
+
+                        var bars = barchart.selectAll('.bar')
+                            .data([key, value]); 
+
+                        bars.enter()
+                            .append('rect')
+                            .attr('class', 'bar' + key)
+                            .attr('fill', "#6baed6")
+                            .attr("stroke", "white")
+                            .attr("stroke-width", 0.5)
+                            .attr('x', d => makeScale(key))
+                            .attr('y', d => chartHeight + 20)
+                            .attr('height', 0)
+                            .attr('width', d => (chartWidth - 70) / Object.keys(filtered_makes).length)
+                            .transition() // Add transition
+                            .duration(900) 
+                            .attr('y', d => countScale(value) + 20)
+                            .attr('height', d => chartHeight - countScale(value));
+
+                        bars
+                            .transition()
+                            .duration(900)
+                            .attr('fill', "blue")
+                            .attr('x', d => makeScale(key))
+                            .attr('y', d => countScale(value) - chartMargin.bottom)
+                            .attr('height', d => chartHeight - countScale(value));
+
+                        bars.exit()
+                            .transition()
+                            .duration(500)
+                            .attr('height', 0)
+                            .remove();
+                    };
+                }
+                updateBarChart();
                 
                 function mouseEntersState() {
                     let zone = d3.select(this);

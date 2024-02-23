@@ -232,7 +232,7 @@
                     .attr("class", "underzip")
                     .attr("d", path)
                     .attr("stroke", "none")
-                    .attr("fill", "gray");
+                    .attr("fill", "#bbb");
             
                 // zip drawing
                 map.selectAll("path.zip").data(zips.features) // AKS : implement background for areas w/ no zipcode ^
@@ -243,7 +243,8 @@
                     .attr("stroke-width", 0.5)
                     .attr("fill", d => zColorScale ( d.properties.total ))
                     .on('mouseover', mouseEntersState)
-                    .on('mouseout', mouseLeavesState);
+                    .on('mouseout', mouseLeavesState)
+                    .on('click', updateBarChart);
                 
                 // roadway drawing
                 map.selectAll("path.roadway").data(roadways.features)
@@ -308,9 +309,21 @@
                     .style("font-style", "italic");
                 
                 const barchart_width = tooltip.attr("width") - 20;
-                const barchart_height = tooltip.attr("height") - 50;
-                const chartTitle = d3.select("#charttitle");
-                const chartMargin = { top: 100, right: 20, bottom: 20, left: 20 };
+                const barchart_height = tooltip.attr("height") - 200;
+                
+                let chartTitle = tooltip.append("text")
+                        .attr("class", "chart-title")
+                        .attr("fill", "#e3e3e3")
+                        .attr("x", "50%")
+                        .attr("y", "25%")
+                        .attr("text-anchor", "middle")
+                        .attr("dominant-baseline", "middle")
+                        .style("font-family", "Helvetica")
+                        .style("font-size", "10px")
+                        .style("font-style", "italic")
+                        .text("Click on a region to view top makes!")
+
+                const chartMargin = { top: 120, right: 20, bottom: 20, left: 20 };
                 const chartWidth = barchart_width - chartMargin.left - chartMargin.right - 15;
                 const chartHeight = barchart_height - chartMargin.top - chartMargin.bottom;
                 const barchart = tooltip.append("g")
@@ -328,11 +341,31 @@
                     }
       
                     barchart.html(""); //clear chart
-                    chartTitle.html(""); //clear title
 
-                    console.log(zone);
+                    if (toggle == "county") {
+                        chartTitle.text("Top EV makes in " + zone.properties.NAME + " County"); //clear title
+                    } else {
+                        chartTitle.text("Top EV makes in ZIP " + zone.properties.ZCTA5CE10);
+                    }
+
+                    if (zone.properties.total == 0) {
+                        barchart.append("text")
+                            .attr("class", "chart-title")
+                            .attr("fill", "#e3e3e3")
+                            .attr("x", "45%")
+                            .attr("y", "20%")
+                            .attr("text-anchor", "middle")
+                            .attr("dominant-baseline", "middle")
+                            .style("font-family", "Helvetica")
+                            .style("font-size", "20px")
+                            .style("font-style", "bold")
+                            .text("No data to show here.");
+                    }
+                    
+
+
                     let makes = zone.properties.makes;
-                    console.log(makes);
+                    
                     filtered_makes = Object.fromEntries(Object.entries(makes)
                                             .sort(([, a], [, b]) => b - a)                    
                                             .slice(0,5)); //doesn't limit entries with tie
@@ -344,22 +377,28 @@
                                         .domain([0, Math.max(...Object.values(filtered_makes))])
                                         .range([chartHeight, 0]);
 
-                    let leftAxis = d3.axisLeft(countScale).tickFormat(function(d) { return d; });
-                    barchart.append('g')
-                            .attr('transform', `translate(${chartMargin.left},${chartMargin.bottom})`)
-                            .attr("stroke", "#e3e3e3")
-                            .call(leftAxis);
-
                     let leftGrid = d3.axisLeft(countScale).tickFormat('').tickSize(-chartWidth).ticks(10)
                     barchart.append('g')
                             .attr('transform', `translate(${chartMargin.left + 15},${chartMargin.bottom})`)
                             .attr('class', 'gridlines')
-                            .attr("fill", "#e3e3e3")
+                            .attr("stroke", "#e3e3e3")
                             .call(leftGrid);
+
+                    let leftAxis = d3.axisLeft(countScale).tickFormat(function(d) { return d; });
+                    barchart.append('g')
+                            .attr('transform', `translate(${chartMargin.left},${chartMargin.bottom})`)
+                            .attr("fill", "#e3e3e3")
+                            .attr("class", "gridlines")
+                            .call(leftAxis)
+                            .selectAll("text")
+                            .style("text-anchor", "end")
+                            .attr("fill", "#e3e3e3");
+    
                     
                     let bottomAxis = d3.axisBottom(makeScale)
                     barchart.append('g')
                             .attr('transform', `translate(${chartMargin.left},${chartHeight + chartMargin.bottom})`)
+                            .attr("class", "gridlines")
                             .call(bottomAxis)
                             .selectAll("text")
                             .style("text-anchor", "end")
@@ -375,13 +414,13 @@
                         bars.enter()
                             .append('rect')
                             .attr('class', 'bar' + key)
-                            .attr('fill', "#6baed6")
+                            .attr('fill', "gold")
                             .attr("stroke", "white")
                             .attr("stroke-width", 0.5)
                             .attr('x', d => makeScale(key))
                             .attr('y', d => chartHeight + 20)
                             .attr('height', 0)
-                            .attr('width', d => (chartWidth - 70) / Object.keys(filtered_makes).length)
+                            .attr('width', d => (chartWidth - 70) / 5)
                             .transition() // Add transition
                             .duration(900) 
                             .attr('y', d => countScale(value) + 20)
@@ -438,6 +477,10 @@
                     zone.transition()
                         .attr("stroke", "#0e1524")
                         .attr("stroke-width", 0.5);
+
+                    barchart.selectAll("*").remove();
+
+                    chartTitle.text("Click on a region to view top makes!");
                 }
 
                 d3.select("#countyview")
@@ -475,7 +518,7 @@
                         map.attr("transform", d3.event.transform);
                         map.selectAll("circle")
                             .attr("r", 4 / d3.event.transform.k  );
-                        map.selectAll("roadway")
+                        map.selectAll(".roadway")
                             .attr("stroke-width", 2 / d3.event.transform.k );
 
                 }

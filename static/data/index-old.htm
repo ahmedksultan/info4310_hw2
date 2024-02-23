@@ -1,0 +1,533 @@
+<html>
+    <head>
+        <title>INFO 4310 - HW2</title>
+
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <script src="https://d3js.org/topojson.v2.min.js"></script>
+        <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+        <style>
+            .header {
+                text-align: center;
+                font-family: "Helvetica";
+            }
+
+            .page-title {
+                font-size: 72px;
+                padding-top: 0.5em;
+                margin: 0;
+            }
+
+            /* svg {
+                padding-left: 5vw;
+            } */
+
+            .container {
+                display: flex;
+                flex-direction: row;
+            }
+
+            h2 {
+                font-family: "Helvetica";
+                text-align: center;
+            }
+
+            button {
+                background-color: white;
+                color: #445;
+                border: 1px solid gray;
+                padding: 5px;
+                padding-left: 15px;
+                padding-right: 15px;
+                font-size: medium;
+                border-style: ridge;
+                margin-bottom: 5px;
+            }
+
+            text {
+                font-family: "Helvetica";
+            }
+
+            .container {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .gridlines line {
+                stroke: #bbb;
+            }
+
+            .gridlines .domain {
+                stroke: none;
+            }
+
+        </style>
+    </head>
+
+    <body>
+        <div class="header">
+            <h1 class="page-title">EVs in Washington</h1>
+            <p>prepared by <b>Ahmed Sultan</b> (aks264) and <b>Sydney Wan</b> (ssw73), for Professor Rzeszotarski's INFO 4310 class</p>
+        </div>
+
+        <div class="container">
+            <div>
+                <h2>Blah blah blah</h2>
+                <div class="map">
+                    <div id="toggle-map-view"></div>
+                    <svg id="colorLegend" height="150" width="200" style="margin-bottom:10px; padding-left: 20px;"> </svg>
+                    <svg id="choropleth" height="500" width="800" style="border:1px solid gray;"></svg>
+
+                </div>
+                
+            </div>
+            <div class ="container2">
+                <h4 id="charttitle"></h4>
+                <svg id="barchart" height="400" width="500" style="border:1px solid gray;"></svg>
+            </div>
+        </div>
+
+        <script>
+            
+            const requestData = async function() {
+                const counties = await d3.json("data/wa_county_boundaries_2.geojson");
+                const zips = await d3.json("data/wa_washington_zip_codes_geo.min.json");
+                
+                const county_EVs = await d3.json("data/ev_data_COUNTY_short.json");
+                const zip_EVs = await d3.json("data/ev_data_ZIP_short.json");
+
+                const roadways = await d3.json("data/wa_roadways.geojson");
+
+                // console.log(counties);
+                // console.log(zips);
+
+                // SVG A : CHOROPLETH MAP
+                let svg_a = d3.select("#choropleth")
+                let width_a = svg_a.attr("width");
+                let height_a = svg_a.attr("height");
+
+                let margin = {
+                    top: 10, bottom: 10, right: 10, left: 10
+                }
+
+                let mapWidth = width_a - margin.left - margin.right;
+                let mapHeight = height_a - margin.top - margin.bottom;
+
+                let map = svg_a.append("g")
+                                .attr("transform", "translate("+margin.left+","+margin.top+")");
+
+                /* COME BACK TO THIS
+
+                // attempt to implement zoom feature
+                var zoom = d3.zoom()
+                  .scaleExtent([1,10])
+                  .translateExtent([[-50,-50],[mapWidth+50,mapHeight+50]])
+                  .on("zoom", zoomMap);
+
+                svg_a.call(zoom);
+
+                */
+               
+                // geojson stuff 
+                projection = d3.geoMercator()
+                            .fitSize([mapWidth - 10, mapHeight - 50], counties);
+                let path = d3.geoPath().projection(projection);
+
+                 // for scales and reference
+                 statewide = {
+                            "totals": [],
+                            "makes": [],
+                            "years": [], 
+                            // "ranges" : [],
+                            "types": [],
+                            "clean_el": []
+                }
+
+                // adding county-specific data from EV dataset
+                counties.features.forEach( c => { 
+                    target_name = c.properties["NAME"];
+                    target = county_EVs[target_name];
+
+                    // appending to geojson feature property info
+                    c.properties["total"] = target["total"];
+                    c.properties["makes"] = target["makes"];
+                    // maybe later its a lot of # for no rzn
+                    // c.properties["ranges"] = target["ranges"]
+                    c.properties["years"] = target["years"];
+                    c.properties["types"] = target["types"];
+                    c.properties["clean_el"] = target["clean_eligibilities"];
+
+                    // adding to state-wide data
+                    // statewide["totals"].push(target["total"]);
+                });
+
+                zip_totals = [];
+
+                zips.features.forEach( z => {
+                    target_zip = z.properties["ZCTA5CE10"];
+
+                    if (zip_EVs[target_zip] === undefined) {
+                        z.properties["county"] = 'NA';
+                        z.properties["city"] = 'NA';
+
+                        z.properties["total"] = 0;
+                        z.properties["makes"] = {};
+                        z.properties["years"] = {};
+                        z.properties["types"] = {};
+                        z.properties["clean_el"] = {};
+                    } else {
+                        target = zip_EVs[target_zip];
+
+                        z.properties["county"] = target["county"];
+                        z.properties["city"] = target["city"];
+
+                        // appending to geojson feature property info
+                        z.properties["total"] = target["total"];
+                        z.properties["makes"] = target["makes"];
+                        // Again, maybe later its a lot of # for no reason
+                        // c.properties["ranges"] = target["ranges"]
+                        z.properties["years"] = target["years"];
+                        z.properties["types"] = target["types"];
+                        z.properties["clean_el"] = target["clean_eligibilities"];
+
+                        zip_totals.push(target["total"]);
+                    }
+                    
+                })
+
+                // double checking
+                console.log(counties.features);
+                console.log(county_EVs);
+
+                console.log(zip_totals.sort((a,b) => a - b));
+
+                // some quick scale stuff
+                // const minmax = d3.extent(Object.values(statewide["totals"]));
+                const minmax = d3.extent(counties.features, d => d.properties.total);
+
+                let countyColorScaleThresholds = [0, 100, 300, 1000, 5000, 100000];
+                let countyColorScale = d3.scaleLinear()
+                                    .domain(countyColorScaleThresholds)
+                                    .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
+
+                // const zip_minmax = d3.extent(zips.features, d => d.properties.total);
+                let zipThresholds = [0, 5, 30, 150, 550, 4433];
+                let zipColorScale = d3.scaleLinear()
+                    .domain(zipThresholds)
+                    .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
+
+
+                //County polgyons
+                map.selectAll(".county").data(counties.features)
+                            .enter()
+                            .append("path")
+                            .attr("class", "county")
+                            .attr("d", path)
+                            .style("stroke", "white") 
+                            .style("stroke-width", 0.5)
+                            .style("fill", d => countyColorScale( d.properties.total ))
+                            .on('mouseover', mouseEntersState)
+                            .on('mouseout', mouseLeavesState)
+                            .on('click', updateBarChart);
+
+                //Zip polygons
+                map.selectAll(".zip").data(zips.features)
+                            .enter()
+                            .append("path")
+                            .attr("class", "zip")
+                            .attr("d", path)
+                            .style("stroke", "white") 
+                            .style("stroke-width", 0.5)
+                            .style("fill", d => zipColorScale( d.properties.total ))
+                            .on('mouseover', mouseEntersState)
+                            .on('mouseout', mouseLeavesState);
+
+                map.selectAll(".roadway").data(roadways.features)
+                    .enter()
+                    .append("path")
+                    .attr("class", "road")
+                    .attr("d", path)
+                    .attr("stroke", "yellow")
+                    .attr("stroke-width", 1)
+                    .style("fill", "none");
+
+                 // Plot EV station data
+                 stations = await d3.csv("data/alt_fuel_stations.csv", d3.autoType);
+
+                stations.forEach( d => {
+                        d.Position = projection( [d.Longitude, d.Latitude] );          
+                    });
+                    let circles = map.selectAll("circle").data(stations)
+                                .join("circle")
+                                .attr("r", 4)
+                                .attr("fill", "green")
+                                .attr("opacity", 0.7)
+                                .attr("cx", d => d.Position[0])
+                                .attr("cy", d => d.Position[1]);
+
+                let toggle = "county";
+                let initialState = null;
+
+                //Hover tooltip
+                let tooltipWidth = 120;
+                let tooltipHeight = 40;
+                
+                let tooltip = map.append("g")
+                                .attr("class", "tooltip")
+                                .attr("visibility", "hidden"); 
+                
+                tooltip.append("rect")
+                        .attr("fill", "white")
+                        .attr("opacity", 0.9)
+                        .attr("x", -tooltipWidth / 2.0)
+                        .attr("y", 0)
+                        .attr("width", tooltipWidth)
+                        .attr("height", tooltipHeight);
+                
+                let txt = tooltip.append("text")
+                                .attr("fill", "#2171b5")
+                                .attr("text-anchor", "middle")
+                                .attr("alignment-baseline", "hanging")
+                                .attr("x", 0)
+                                .attr("y", 2)
+                                .style("font-weight", 600)
+                                .style("font-family", "Helvetica");
+                
+                let txt2 = tooltip.append("text")
+                                    .attr("fill", "#2171b5")
+                                    .attr("text-anchor", "middle")
+                                    .attr("alignment-baseline", "hanging")
+                                    .attr("x", 0)
+                                    .attr("y", 22)
+                                    .style("font-family", "Helvetica");;
+
+                function mouseEntersState() {
+                    tooltip.style("visibility", "visible");
+                    
+                    let zone = d3.select(this);
+                    let name = "NAME";
+                    let zoneTotal = zone.datum().properties.total;
+                    if (toggle === "zip") {
+                        name = "ZCTA5CE10";
+                        zoneTotal = "TBD"; //UPDATE WHEN ZIPCODE TOTALS ARE CALCULATED
+                    }
+                    let zoneName = zone.datum().properties[name];
+                                                
+                    
+                    txt.text(zoneName);
+                    txt2.text(zoneTotal);
+                    
+                    let bounds = path.bounds(zone.datum());
+                    let xPos = (bounds[0][0] + bounds[1][0]) / 2.0;
+                    let yPos = bounds[1][1] - 15;
+                    
+                    tooltip.attr("transform", `translate(${xPos},${yPos})`);
+
+                    d3.select(this)
+                        .transition()
+                        .style("opacity", 1)
+                        .style("stroke-width", 3)
+                        .style("stroke", "white");
+
+
+                }
+          
+                function mouseLeavesState() {
+                    tooltip.style("visibility", "hidden");
+                    txt.text("");
+                    txt2.text("");
+                    let zone = d3.select(this);
+                    zone.transition()
+                        .style("stroke", "white")
+                        .style("stroke-width", 0.5);
+                }
+
+                // Create dynamic bar chart to show car make by county/zip
+                const svg_b = d3.select("#barchart");
+                const barchart_width = svg_b.attr("width");
+                const barchart_height = svg_b.attr("height");
+                const chartTitle = d3.select("#charttitle");
+                const chartMargin = { top: 20, right: 20, bottom: 20, left: 20 };
+                const chartWidth = barchart_width - chartMargin.left - chartMargin.right;
+                const chartHeight = barchart_height - chartMargin.top - chartMargin.bottom;
+                const barchart = svg_b.append("g")
+                                        .attr("transform", "translate(" + chartMargin.left + "," + chartMargin.top + ")");
+
+                function updateBarChart() {
+                    let zone = null;
+                    if (d3.select(this)._groups[0][0] === window) {
+                            zone = d3.select(counties.features[8]);
+                            return;                     
+                        
+                    }
+                    else {
+                        zone = d3.select(this)._groups[0][0].__data__;
+                    }
+      
+                    svg_b.html(""); //clear chart
+                    chartTitle.html(""); //clear title
+
+                    console.log(zone);
+                    let makes = zone.properties.makes;
+     
+                    let makeScale = d3.scalePoint()
+                                      .domain(Object.keys(makes))
+                                      .range([40, chartWidth - 20]);
+                    let countScale = d3.scaleSymlog() //not sure if we should do scaleLinear or Symlog
+                                        .domain([Math.max(...Object.values(makes)), 0])
+                                        .range([0, chartHeight - 40]);
+
+                    let leftAxis = d3.axisLeft(countScale).tickFormat(function(d) { return d; });
+                    svg_b.append('g')
+                            .attr('transform', `translate(${chartMargin.left + 15},${chartMargin.top})`)
+                            .call(leftAxis);
+                    
+                    let leftGrid = d3.axisLeft(countScale).tickFormat('').tickSize(-chartWidth)
+                    svg_b.append('g')
+                            .attr('transform', `translate(${chartMargin.left + 15},${chartMargin.top})`)
+                            .attr('class', 'gridlines')
+                            .call(leftGrid);
+                    
+                    let bottomAxis = d3.axisBottom(makeScale)
+                    svg_b.append('g')
+                            .attr('transform', `translate(${chartMargin.left},${chartHeight + chartMargin.top - 40})`)
+                            .call(bottomAxis)
+                            .selectAll("text")
+                            .style("text-anchor", "end")
+                            .attr("transform", "rotate(-65)");
+
+
+                    for (const [key, value] of Object.entries(makes)) {
+
+                        var bars = svg_b.selectAll('.bar')
+                            .data([key, value]); 
+
+                        bars.enter()
+                            .append('rect')
+                            .attr('class', 'bar' + key)
+                            .attr('fill', "#6baed6")
+                            .attr("stroke", "white")
+                            .attr("stroke-width", 0.5)
+                            .attr('x', d => makeScale(key) + 10)
+                            .attr('y', d => chartHeight - 25)
+                            .attr('height', 0)
+                            .attr('width', d => (chartWidth - 30) / Object.keys(makes).length)
+                            .transition() // Add transition
+                            .duration(900) 
+                            .attr('y', d => countScale(value) - 25)
+                            .attr('height', d => chartHeight - countScale(value));
+
+                        bars
+                            .transition()
+                            .duration(900)
+                            .attr('fill', "blue")
+                            .attr('x', d => makeScale(key) + 5)
+                            .attr('y', d => countScale(value) + 20)
+                            .attr('height', d => chartHeight - countScale(value));
+
+                        bars.exit()
+                            .transition()
+                            .duration(500)
+                            .attr('height', 0)
+                            .remove();
+                    };
+
+                    chartTitle.append("text")
+                      .attr("x", chartWidth / 2)
+                      .attr("y", chartHeight / 2)
+                      .text("Car Make BreaKdown in " + zone.properties.NAME);
+                }
+                updateBarChart();
+
+                //option to toggle between county and zipcode view
+                const mapViews = ["county", "zip"];
+                
+                mapViews.forEach(d => {
+                    let title = "County View"
+                    if (d === "zip") {
+                        title = "Zip View"
+
+                    }
+
+                    d3.select("div#toggle-map-view")
+                        .append("button")
+                        .attr("class", "category")
+                        .attr("id", d)
+                        .text(title)
+                        .on("click", function () {
+                            d3.selectAll("button.category").style('background-color', "white").style("text-decoration", "none");
+                            d3.select(this).style("background-color", "#9ecae1").style("text-decoration", "underline");
+                            updateMap(d);
+
+                        });
+                    d3.select(`button#county`).style("background-color", "#9ecae1").style("text-decoration", "underline");
+
+
+                })
+
+                //drawLegend
+                const svg_c = d3.select("#colorLegend");
+                let legend = svg_c.append("g")
+                var size = 10;
+                
+
+                function updateLegend(thresholds) {
+
+                    legend.selectAll("squares")
+                    .data(thresholds)
+                    .enter()
+                    .append("rect")
+                        .attr("x", 0)
+                        .attr("y", function(d,i){ return 30 + i*(size+12)})
+                        .attr("width", size)
+                        .attr("height", size)
+                        .style("fill", function(d){ return countyColorScale(d)});
+
+                    legend.selectAll("legend_names")
+                        .data(thresholds)
+                        .enter()
+                        .append("text")
+                            .attr("x", 5 + size* 1.2)
+                            .attr("y", function(d,i){ return 30 + i*(size+12) + (size/2)})
+                            .style("fill", d => countyColorScale(d) )
+                            .text(function(d, i){ 
+                                let val1 = d3.format(",")(thresholds[i].toString()) ;
+            
+                                if (i === 5) {
+                                    return val1.concat("+");
+                                }
+                                else {
+                                    let val2 = d3.format(",")(thresholds[i+1].toString()) ;
+                                    return val1.concat(" - ", val2);
+                                }})
+                            .attr("text-anchor", "left")
+                            .style("alignment-baseline", "middle")
+                            .style("font-size", "15px");
+                    
+                    
+                }
+                updateLegend(countyColorScaleThresholds)
+                updateMap(toggle);
+
+                function updateMap(view) {
+                    toggle = view;
+                                          
+                    map.selectAll(".county")
+                            .attr("visibility", (toggle === "county") ? "visible" : "hidden");
+                    map.selectAll(".zip")
+                            .attr("visibility", (toggle === "zip") ? "visible" : "hidden");
+ 
+                }
+    
+                //function to zoom
+                function zoomMap() {    
+    
+                        map.attr("transform", d3.event.transform);
+                        circles.attr("r", 4 / d3.event.transform.k  );
+
+                }
+            }
+            requestData();
+        </script>
+    </body>
+</html>

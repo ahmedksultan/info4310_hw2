@@ -1,0 +1,393 @@
+<html>
+    <head>
+        <title>INFO 4310 - HW2</title>
+
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <script src="https://d3js.org/topojson.v2.min.js"></script>
+        <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+        <style>
+            body {
+                background-color: #0e1524;
+            }
+
+            h1, h2, p {
+                font-family: "Helvetica";
+                text-align: center;
+                color: #e3e3e3;
+            }
+
+            .header {
+                text-align: center;
+                font-family: "Helvetica";
+            }
+
+            .page-title {
+                font-size: 72px;
+                padding-top: 5vh;
+                margin: 0;
+            }
+
+            .container {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .map-holder {
+                text-align: center;
+                padding-right: 2em;
+            }
+
+            button {
+                background-color: white;
+                color: #445;
+                border: 1px solid gray;
+                padding: 5px;
+                padding-left: 15px;
+                padding-right: 15px;
+                font-size: medium;
+                border-style: ridge;
+                margin-bottom: 5px;
+            }
+
+            .gridlines line {
+                stroke: #bbb;
+            }
+
+            .gridlines .domain {
+                stroke: none;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="header">
+            <h1 class="page-title">EVs in Washington</h1>
+            <p>by <b>Ahmed Sultan</b> (aks264) and <b>Sydney Wan</b> (ssw73), for Prof. Rzeszotarski's INFO 4310 class</p>
+        </div>
+        <div class="container">
+            <div class="map-holder">
+                <h2>Electric vehicles in Washington, by county</h2>
+                <div class="toggle-holder" height="500" width="200" >
+                    <button id="countyview">County view</button>
+                    <button id="zipview">Zipcode view</button>
+                </div>
+                <svg id="cp-legend" height="500" width="200" style="border: 1px solid blue;"></svg>
+                <svg id="choropleth" height="500" width="700" style="border: 0px solid gray;"></svg>
+            </div>
+            <div class="hover-holder">
+                <h2>hover</h2>
+                <svg id="cp-hover" height="500" width="400" style="border: 1px solid red;"></svg>
+            </div>
+        </div>
+
+        <script>
+
+            const requestData = async function() {
+
+                // LOADING DATA IN
+                // geojsons for counties, zipcodes, roadways
+                const counties = await d3.json("data/wa_county_boundaries_2.geojson");
+                const zips = await d3.json("data/wa_washington_zip_codes_geo.min.json");
+                const roadways = await d3.json("data/wa_roadways.geojson");
+                
+                // jsons for county, zipcode EV populations
+                const county_EVs = await d3.json("data/ev_data_COUNTY_short.json");
+                const zip_EVs = await d3.json("data/ev_data_ZIP_short.json");
+
+                // csv for EV station data
+                const stations = await d3.csv("data/alt_fuel_stations.csv", d3.autoType);
+
+                // console.log(counties);
+                // console.log(zips);
+
+                
+
+                // CHOROPLETH MAP
+                // svg chores...
+                let svg_choro = d3.select("#choropleth");
+                let svg_choro_W = svg_choro.attr("width");
+                let svg_choro_H = svg_choro.attr("height");
+                
+                let margin = { top: 10, bottom: 10, right: 0, left: 10 } // AKS : experiment here
+
+                let mapWidth = svg_choro_W - margin.left - margin.right;
+                let mapHeight = svg_choro_H - margin.top - margin.bottom;
+
+                let map = svg_choro.append("g")
+                    .attr("transform", "translate("+margin.left+","+margin.top+")");
+
+                // AKS : implement SSW zoom
+                var zoom = d3.zoom()
+                  .scaleExtent([1,10])
+                  .translateExtent([[-50,-50],[mapWidth+50,mapHeight+50]])
+                  .on("zoom", zoomMap);
+                  
+                svg_choro.call(zoom);
+
+                // geojson chores...
+                let projection = d3.geoMercator()
+                    .fitSize([mapWidth - 10, mapHeight - 50], counties); // either counties or zip works just giving boundaries
+                let path = d3.geoPath().projection(projection)
+
+                // DATA : merging county and zip data from EV datasets, geojsons
+                let statewide = { // for keeping track of statewide stats!
+                    "totals": [],
+                    "makes": [],
+                    "years": [], 
+                    // "ranges" : [], // AKS : implement ranges ?
+                    "types": [],
+                    "clean_el": []
+                }
+
+                counties.features.forEach( c => {
+                    target_name = c.properties["NAME"];
+                    target = county_EVs[target_name];
+
+                    // appending to geojson feature property info
+                    c.properties["total"] = target["total"];
+                    c.properties["makes"] = target["makes"];
+                    // maybe later its a lot of # for no rzn
+                    // c.properties["ranges"] = target["ranges"]
+                    c.properties["years"] = target["years"];
+                    c.properties["types"] = target["types"];
+                    c.properties["clean_el"] = target["clean_eligibilities"];
+
+                    // adding to state-wide data
+                    statewide["totals"].push(target["total"]);
+                    statewide["makes"].push(target["makes"]);
+                    statewide["years"].push(target["years"]);
+                    statewide["types"].push(target["types"]);
+                    statewide["clean_el"].push(target["clean_eligibilities"]);
+                    // statewide["ranges"].push(target["ranges"]);
+                });
+
+                zips.features.forEach( z => {
+                    target_zip = z.properties["ZCTA5CE10"];
+
+                    if (zip_EVs[target_zip] === undefined) {
+                        z.properties["county"] = 'NA';
+                        z.properties["city"] = 'NA';
+
+                        z.properties["total"] = 0;
+                        z.properties["makes"] = {};
+                        z.properties["years"] = {};
+                        z.properties["types"] = {};
+                        z.properties["clean_el"] = {};
+                    } else {
+                        target = zip_EVs[target_zip];
+
+                        z.properties["county"] = target["county"];
+                        z.properties["city"] = target["city"];
+
+                        // appending to geojson feature property info
+                        z.properties["total"] = target["total"];
+                        z.properties["makes"] = target["makes"];
+                        // Again, maybe later its a lot of # for no reason
+                        // c.properties["ranges"] = target["ranges"]
+                        z.properties["years"] = target["years"];
+                        z.properties["types"] = target["types"];
+                        z.properties["clean_el"] = target["clean_eligibilities"];
+                    }
+                });
+
+                // console.log(counties.features);
+                // console.log(zips.features);
+
+                // DATA : calculating station positions
+                stations.forEach( s => {
+                    s.Position = projection( [s.Longitude, s.Latitude ]);
+                });
+
+                // AKS : calculate station density ?
+                
+                // scale calculations
+                let countyThresholds = [0, 100, 300, 1000, 5000, 90000]; // AKS : check on this l8r
+                let cColorScale = d3.scaleLinear()
+                    .domain(countyThresholds)
+                    .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
+
+                let zipThresholds = [0, 5, 30, 150, 550, 4000]; // AKS : check on this l8r
+                let zColorScale = d3.scaleLinear()
+                    .domain(zipThresholds)
+                    .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
+                
+                // finally drawing :) 
+                // county drawing
+                map.selectAll("path.county").data(counties.features)
+                    .join("path")
+                    .attr("class", "county")
+                    .attr("d", path)
+                    .attr("stroke", "#0e1524") // AKS : do we like this ?
+                    .attr("stroke-width", 0.5)
+                    .attr("fill", d => cColorScale( d.properties.total ))
+                    .on('mouseover', mouseEntersState)
+                    .on('mouseout', mouseLeavesState)
+                    // .on('click', updateBarChart);
+                
+                map.selectAll("path.underzip").data(counties.features)
+                    .join("path")
+                    .attr("class", "underzip")
+                    .attr("d", path)
+                    .attr("stroke", "none")
+                    .attr("fill", "gray");
+            
+                // zip drawing
+                map.selectAll("path.zip").data(zips.features) // AKS : implement background for areas w/ no zipcode ^
+                    .join("path")
+                    .attr("class", "zip")
+                    .attr("d", path)
+                    .attr("stroke", "#0e1524")
+                    .attr("stroke-width", 0.5)
+                    .attr("fill", d => zColorScale ( d.properties.total ))
+                    .on('mouseover', mouseEntersState)
+                    .on('mouseout', mouseLeavesState);
+                
+                // roadway drawing
+                map.selectAll("path.roadway").data(roadways.features)
+                    .join("path")
+                    .attr("class", "roadway")
+                    .attr("d", path)
+                    .attr("stroke", "gold") // AKS : change color ?
+                    .attr("stroke-width", 2)
+                    .attr("fill", "none")
+                    .attr("pointer-events", "none");
+
+                // station drawing
+                map.selectAll("circle").data(stations)
+                    .join("circle")
+                    .attr("r", 4)
+                    .attr('fill', "green") // AKS : change color ?
+                    .attr("stroke", "#0e1524") // AKS : do we like this ?
+                    .attr("stroke-width", 0.25) // AKS : do we like this? 
+                    .attr("opacity", 0.5)
+                    .attr("cx", d => d.Position[0])
+                    .attr("cy", d => d.Position[1])
+                    .attr("pointer-events", "none");
+
+
+                
+                // TOGGLING & INTERACTIVITY
+                let toggle = "county";
+                let initialState = null;
+
+                let tooltip = d3.select("#cp-hover");
+
+                let hcpName = tooltip.append("text")
+                    .attr("class", "hover--name")
+                    .attr("fill", "#e3e3e3")
+                    .attr("text-anchor", "middle")
+                    .attr("dominant-baseline", "middle")
+                    .attr("x", "50%")
+                    .attr("y", "10%")
+                    .style("font-weight", 600)
+                    .style("font-family", "Helvetica")
+                    .style("font-size", "36px");
+                
+                let hcpTotal = tooltip.append("text")
+                    .attr("class", "hover--number")
+                    .attr("fill", "#e3e3e3")
+                    .attr("text-anchor", "middle")
+                    .attr("dominant-baseline", "middle")
+                    .attr("x", "50%")
+                    .attr("y", "20%")
+                    .style("font-family", "Helvetica")
+                    .style("font-size", "18px");
+
+                let hcpZipCountyCity = tooltip.append("text")
+                    .attr("class", "hover--zipcc")
+                    .attr("fill", "#e3e3e3")
+                    .attr("text-anchor", "middle")
+                    .attr("dominant-baseline", "middle")
+                    .attr("x", "50%")
+                    .attr("y", "15%")
+                    .style("font-family", "Helvetica")
+                    .style("font-size", "10px")
+                    .style("font-style", "italic");
+                
+                function mouseEntersState() {
+                    let zone = d3.select(this);
+
+                    if (toggle == "county") {
+                        let zoneName = zone.datum().properties["NAME"];
+                        let zoneTotal = zone.datum().properties.total;
+                        
+                        hcpName.text(zoneName + " County");
+                        hcpTotal.text(zoneTotal + " total cars");
+                    } else {
+                        let zoneName = zone.datum().properties["ZCTA5CE10"]
+                        let zoneTotal = zone.datum().properties.total;
+                        let moreinfo = zone.datum().properties["city"] + ", " + zone.datum().properties["county"] + " County";
+                        
+                        hcpName.text("ZIP " + zoneName);
+                        hcpZipCountyCity.text(moreinfo);
+                        hcpTotal.text(zoneTotal + " total cars");
+                    }
+
+                    zone.transition()
+                        .style("opacity", 1)
+                        .attr("stroke", "#e3e3e3")
+                        .attr("stroke-width", 3);
+                }
+               
+                function mouseLeavesState() {
+                    hcpName.text("");
+                    hcpZipCountyCity.text("");
+                    hcpTotal.text("");
+                    
+                    let zone = d3.select(this);
+                    zone.transition()
+                        .attr("stroke", "#0e1524")
+                        .attr("stroke-width", 0.5);
+                }
+
+                d3.select("#countyview")
+                    .on("click", function () {
+                        d3.selectAll("button").style('background-color', "white").style("text-decoration", "none");
+                        d3.select(this).style("background-color", "#9ecae1").style("text-decoration", "underline");
+                        updateMap("county");
+                    });
+                
+                d3.select("#zipview")
+                    .on("click", function () {
+                        d3.selectAll("button").style('background-color', "white").style("text-decoration", "none");
+                        d3.select(this).style("background-color", "#9ecae1").style("text-decoration", "underline");
+                        updateMap("zip");
+                    });
+
+                function updateMap(view) {
+                    toggle = view;
+                                          
+                    map.selectAll(".county")
+                        .attr("visibility", (toggle === "county") ? "visible" : "hidden");
+                    map.selectAll(".zip")
+                        .attr("visibility", (toggle === "zip") ? "visible" : "hidden");
+                    map.selectAll(".underzip")
+                        .attr("visibility", (toggle === "zip") ? "visible" : "hidden");
+
+                    if (toggle == "county") {
+                        d3.select("#countyview").style("background-color", "#9ecae1").style("text-decoration", "underline");
+                    }
+                    
+                }
+
+                function zoomMap() {    
+    
+                        map.attr("transform", d3.event.transform);
+                        map.selectAll("circle")
+                            .attr("r", 4 / d3.event.transform.k  );
+                        map.selectAll("roadway")
+                            .attr("stroke-width", 2 / d3.event.transform.k );
+
+                }
+
+                updateMap(toggle);
+            }
+
+            requestData()
+
+        </script>
+    </body>
+</html>

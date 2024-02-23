@@ -74,12 +74,12 @@
                     <button id="countyview">County view</button>
                     <button id="zipview">Zipcode view</button>
                 </div>
-                <svg id="cp-legend" height="500" width="200" style="border: 1px solid blue;"></svg>
-                <svg id="choropleth" height="500" width="700" style="border: 0px solid gray;"></svg>
+                <svg id="cp-legend" height="500" width="200"></svg>
+                <svg id="choropleth" height="500" width="700"></svg>
             </div>
             <div class="hover-holder">
-                <h2>hover</h2>
-                <svg id="cp-hover" height="500" width="400" style="border: 1px solid red;"></svg>
+                <p><i>Hover over map for more information.</i></p>
+                <svg id="cp-hover" height="500" width="400"></svg>
             </div>
         </div>
 
@@ -512,6 +512,14 @@
                     if (toggle == "county") {
                         d3.select("#countyview").style("background-color", "#9ecae1").style("text-decoration", "underline");
                     }
+
+                    if (toggle == "county") {
+                        legend.selectAll("*").remove();
+                        updateLegend(toggle, countyThresholds);
+                    } else {
+                        legend.selectAll("*").remove();
+                        updateLegend(toggle, zipThresholds);
+                    }
                     
                 }
 
@@ -525,8 +533,83 @@
 
                 }
 
-                updateMap(toggle);
-            }
+
+
+                // LEGEND
+                let legend = d3.select("#cp-legend");
+                let legend_size = 15;
+
+                function updateLegend(toggle, thresholds) {
+                    if (toggle == "county") { 
+                        legend.selectAll("squares")
+                        .data(thresholds)
+                        .enter()
+                        .append("rect")
+                            .attr("x", 0)
+                            .attr("y", function(d,i){ return 30 + i*(legend_size+12)})
+                            .attr("width", legend_size)
+                            .attr("height", legend_size)
+                            .style("fill", function(d){ return cColorScale(d)});
+
+                        legend.selectAll("legend_names")
+                            .data(thresholds)
+                            .enter()
+                            .append("text")
+                                .attr("x", 5 + legend_size* 1.2)
+                                .attr("y", function(d,i){ return 35 + i*(legend_size+12) + (legend_size/2)})
+                                .style("fill", d => cColorScale(d) )
+                                .text(function(d, i){ 
+                                    let val1 = d3.format(",")(thresholds[i].toString()) ;
+                
+                                    if (i === 5) {
+                                        return val1.concat("+");
+                                    }
+                                    else {
+                                        let val2 = d3.format(",")(thresholds[i+1].toString()) ;
+                                        return val1.concat(" - ", val2);
+                                    }})
+                                .attr("text-anchor", "left")
+                                .style("font-family", "Helvetica")
+                                .style("alignment-baseline", "middle")
+                                .style("font-size", "15px");
+                    } else {
+                        legend.selectAll("squares")
+                        .data(thresholds)
+                        .enter()
+                        .append("rect")
+                            .attr("x", 0)
+                            .attr("y", function(d,i){ return 30 + i*(legend_size+12)})
+                            .attr("width", legend_size)
+                            .attr("height", legend_size)
+                            .style("fill", function(d){ return zColorScale(d)});
+
+                        legend.selectAll("legend_names")
+                            .data(thresholds)
+                            .enter()
+                            .append("text")
+                                .attr("x", 5 + legend_size* 1.2)
+                                .attr("y", function(d,i){ return 35 + i*(legend_size+12) + (legend_size/2)})
+                                .style("fill", d => zColorScale(d) )
+                                .text(function(d, i){ 
+                                    let val1 = d3.format(",")(thresholds[i].toString()) ;
+                
+                                    if (i === 5) {
+                                        return val1.concat("+");
+                                    }
+                                    else {
+                                        let val2 = d3.format(",")(thresholds[i+1].toString()) ;
+                                        return val1.concat(" - ", val2);
+                                    }})
+                                .attr("text-anchor", "left")
+                                .style("alignment-baseline", "middle")
+                                .style("font-family", "Helvetica")
+                                .style("font-size", "15px");
+                        }
+                    }
+                    
+                    updateMap(toggle);
+
+                }
 
             requestData()
 

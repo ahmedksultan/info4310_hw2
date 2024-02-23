@@ -320,8 +320,7 @@
                         .attr("dominant-baseline", "middle")
                         .style("font-family", "Helvetica")
                         .style("font-size", "10px")
-                        .style("font-style", "italic")
-                        .text("Click on a region to view top makes!")
+                        .style("font-style", "italic");
 
                 const chartMargin = { top: 120, right: 20, bottom: 20, left: 20 };
                 const chartWidth = barchart_width - chartMargin.left - chartMargin.right - 15;
@@ -452,6 +451,8 @@
                         
                         hcpName.text(zoneName + " County");
                         hcpTotal.text(zoneTotal + " total cars");
+                        chartTitle.text("Click on a region to view top makes!");
+                        
                     } else {
                         let zoneName = zone.datum().properties["ZCTA5CE10"]
                         let zoneTotal = zone.datum().properties.total;
@@ -460,6 +461,7 @@
                         hcpName.text("ZIP " + zoneName);
                         hcpZipCountyCity.text(moreinfo);
                         hcpTotal.text(zoneTotal + " total cars");
+                        chartTitle.text("Click on a region to view top makes!");
                     }
 
                     zone.transition()
@@ -480,7 +482,7 @@
 
                     barchart.selectAll("*").remove();
 
-                    chartTitle.text("Click on a region to view top makes!");
+                    chartTitle.text("");
                 }
 
                 d3.select("#countyview")

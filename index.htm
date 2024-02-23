@@ -71,7 +71,7 @@
             <div class="map-holder">
                 <h2>Electric vehicles in Washington, by county</h2>
                 <svg id="cp-legend" height="500" width="200" style="border: 1px solid blue;"></svg>
-                <svg id="choropleth" height="500" width="800" style="border: 0px solid gray;"></svg>
+                <svg id="choropleth" height="500" width="700" style="border: 0px solid gray;"></svg>
             </div>
             <div class="hover-holder">
                 <h2>hover</h2>
@@ -93,6 +93,9 @@
                 const county_EVs = await d3.json("data/ev_data_COUNTY_short.json");
                 const zip_EVs = await d3.json("data/ev_data_ZIP_short.json");
 
+                // csv for EV station data
+                const stations = await d3.csv("data/alt_fuel_stations.csv", d3.autoType);
+
                 // console.log(counties);
                 // console.log(zips);
 
@@ -104,7 +107,7 @@
                 let svg_choro_W = svg_choro.attr("width");
                 let svg_choro_H = svg_choro.attr("height");
                 
-                let margin = { top: 10, bottom: 10, right: 10, left: 10 } // AKS : experiment here
+                let margin = { top: 10, bottom: 10, right: 0, left: 10 } // AKS : experiment here
 
                 let mapWidth = svg_choro_W - margin.left - margin.right;
                 let mapHeight = svg_choro_H - margin.top - margin.bottom;
@@ -182,26 +185,70 @@
 
                 // console.log(counties.features);
                 // console.log(zips.features);
+
+                // DATA : calculating station positions
+                stations.forEach( s => {
+                    s.Position = projection( [s.Longitude, s.Latitude ]);
+                });
+
+                // AKS : calculate station density ?
                 
                 // scale calculations
-                let countyThresholds = [0, 100, 300, 1000, 5000, 100000]; // AKS : check on this l8r
+                let countyThresholds = [0, 100, 300, 1000, 5000, 90000]; // AKS : check on this l8r
                 let cColorScale = d3.scaleLinear()
                     .domain(countyThresholds)
                     .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
+
+                let zipThresholds = [0, 5, 30, 150, 550, 4000]; // AKS : check on this l8r
+                let zColorScale = d3.scaleLinear()
+                    .domain(zipThresholds)
+                    .range(["#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]);
                 
                 // finally drawing :) 
+                // county drawing
                 map.selectAll("path.county").data(counties.features)
                     .join("path")
                     .attr("class", "county")
                     .attr("d", path)
-                    .attr("stroke", "#e3e3e3")
+                    .attr("stroke", "#0e1524") // AKS : do we like this ?
                     .attr("stroke-width", 0.5)
                     .attr("fill", d => cColorScale( d.properties.total ))
                     // .on('mouseover', mouseEntersState)
                     // .on('mouseout', mouseLeavesState)
                     // .on('click', updateBarChart);
+                
+                // zip drawing
+                map.selectAll("path.zip").data(zips.features) // AKS : implement background for areas w/ no zipcode ^
+                    .join("path")
+                    .attr("class", "county")
+                    .attr("d", path)
+                    .attr("stroke", "#0e1524")
+                    .attr("stroke-width", 0.5)
+                    .attr("fill", d => zColorScale ( d.properties.total ))
+                    // .on('mouseover', mouseEntersState)
+                    // .on('mouseout', mouseLeavesState)
+                
+                // roadway drawing
+                map.selectAll("path.roadway").data(roadways.features)
+                    .join("path")
+                    .attr("class", "roadway")
+                    .attr("d", path)
+                    .attr("stroke", "gold") // AKS : change color ?
+                    .attr("stroke-width", 2)
+                    .attr("fill", "none");
 
+                // station drawing
+                map.selectAll("circle").data(stations)
+                    .join("circle")
+                    .attr("r", 4)
+                    .attr('fill', "green") // AKS : change color ?
+                    .attr("stroke", "#0e1524") // AKS : do we like this ?
+                    .attr("stroke-width", 0.25) // AKS : do we like this? 
+                    .attr("opacity", 0.5)
+                    .attr("cx", d => d.Position[0])
+                    .attr("cy", d => d.Position[1]);
 
+                
 
 
 

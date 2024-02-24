@@ -9,6 +9,7 @@
         <style>
             body {
                 background-color: #0e1524;
+                justify-items: center;
             }
 
             h1, h2, p {
@@ -33,6 +34,11 @@
                 flex-direction: row;
                 align-items: center;
                 justify-content: center;
+            }
+
+            .narrative-container {
+                width: 70%;
+                margin: 0 auto;
             }
 
             .map-holder {
@@ -67,6 +73,11 @@
             <h1 class="page-title">EVs in Washington</h1>
             <p>by <b>Ahmed Sultan</b> (aks264) and <b>Sydney Wan</b> (ssw73), for Prof. Rzeszotarski's INFO 4310 class</p>
         </div>
+
+        <div class="narrative-container" style="padding-top: 1em;">
+            <p>Washington has one of the earliest all-electric vehicle (EV) targets in the country, aiming to ban most non-electric vehicle sales by 2030. Thanks to data made available by <a href="https://gisdata-wsdot.opendata.arcgis.com/">WSDOT</a>, we attempted to explore whether or not Washington is ready to meet this goal, as well as identifying regional disparities across the state. In the visualizations below, you can see total EV counts by county, as well as regional breakdowns of the most popular makes, as well as the average year, range, and type (battery powered, or plug-in hybrid) of vehicle.</p>
+        </div>
+        
         <div class="container">
             <div class="map-holder">
                 <h2>Electric vehicles in Washington, by region</h2>
@@ -150,7 +161,7 @@
                     c.properties["total"] = target["total"];
                     c.properties["makes"] = target["makes"];
                     // maybe later its a lot of # for no rzn
-                    // c.properties["ranges"] = target["ranges"]
+                    c.properties["ranges"] = target["ranges"]
                     c.properties["years"] = target["years"];
                     c.properties["types"] = target["types"];
                     c.properties["clean_el"] = target["clean_eligibilities"];
@@ -173,6 +184,7 @@
 
                         z.properties["total"] = 0;
                         z.properties["makes"] = {};
+                        z.properties["ranges"] = target["ranges"]
                         z.properties["years"] = {};
                         z.properties["types"] = {};
                         z.properties["clean_el"] = {};
@@ -186,7 +198,7 @@
                         z.properties["total"] = target["total"];
                         z.properties["makes"] = target["makes"];
                         // Again, maybe later its a lot of # for no reason
-                        // c.properties["ranges"] = target["ranges"]
+                        z.properties["ranges"] = target["ranges"]
                         z.properties["years"] = target["years"];
                         z.properties["types"] = target["types"];
                         z.properties["clean_el"] = target["clean_eligibilities"];
@@ -289,7 +301,7 @@
                 
                 let hcpTotal = tooltip.append("text")
                     .attr("class", "hover--number")
-                    .attr("fill", "#e3e3e3")
+                    .attr("fill", "gold")
                     .attr("text-anchor", "middle")
                     .attr("dominant-baseline", "middle")
                     .attr("x", "50%")
@@ -333,7 +345,6 @@
                     if (d3.select(this)._groups[0][0] === window) {
                             zone = d3.select(counties.features[8]);
                             return;                     
-                        
                     }
                     else {
                         zone = d3.select(this)._groups[0][0].__data__;
@@ -439,6 +450,130 @@
                             .attr('height', 0)
                             .remove();
                     };
+
+                    let hcpAvgYr = 0;
+                    for (var yr in zone.properties["years"]) {
+                        hcpAvgYr += (Number(yr) * Number(zone.properties["years"][yr]));
+                    }
+
+                    for (var rng in zone.properties["ranges"]) {
+                        zone.properties["ranges"][rng] = Number(zone.properties["ranges"][rng]);
+                    }
+
+                    zone.properties["ranges"] = zone.properties["ranges"].filter(n => n != 0);
+                    let hcpAvgRange = zone.properties["ranges"].reduce((a, cv) => a + cv) / zone.properties["ranges"].length;
+
+                    
+
+                    tooltip.append("text")
+                        .attr("class", "stats")
+                        .attr("fill", "gold")
+                        .attr("x", "50%")
+                        .attr("y", "75%")
+                        .attr("text-anchor", "middle")
+                        .attr("dominant-baseline", "middle")
+                        .style("font-family", "Helvetica")
+                        .style("font-size", "12px")
+                        .text("Average year: " + (Math.round(hcpAvgYr / zone.properties["total"])));
+                    
+                    tooltip.append("text")
+                        .attr("class", "stats")
+                        .attr("fill", "gold")
+                        .attr("x", "50%")
+                        .attr("y", "78%")
+                        .attr("text-anchor", "middle")
+                        .attr("dominant-baseline", "middle")
+                        .style("font-family", "Helvetica")
+                        .style("font-size", "12px")
+                        .text("Average range: " + (Math.round(hcpAvgRange) + " miles"));
+                   
+
+                    let BEV_pct = 0;
+                    let PHEV_pct = 0;
+                    let total_PHEVBEV = 0;
+
+                    if (Object.keys(zone.properties["types"]).length == 2) {
+                        total_PHEVBEV = zone.properties["types"]["Battery Electric Vehicle (BEV)"] + zone.properties["types"]["Plug-in Hybrid Electric Vehicle (PHEV)"];
+                        
+                        BEV_pct = Math.round(zone.properties["types"]["Battery Electric Vehicle (BEV)"] / total_PHEVBEV * 100);
+                        PHEV_pct = Math.round(zone.properties["types"]["Plug-in Hybrid Electric Vehicle (PHEV)"] / total_PHEVBEV * 100);
+                    } else {
+                        if ("Battery Electric Vehicle (BEV)" in Object.keys(zone.properties["types"])) {
+                            BEV_pct = 100;
+                            PHEV_pct = 0;
+                        } else {
+                            PHEV_pct = 100;
+                            BEV_pct = 0;
+                        }
+                    }
+                    
+                    tooltip.append("text")
+                        .attr("class", "evlgd")
+                        .attr("fill", "#e3e3e3")
+                        .attr("x", "10%")
+                        .attr("y", "86%")
+                        .attr("text-anchor", "middle")
+                        .attr("dominant-baseline", "middle")
+                        .style("font-family", "Helvetica")
+                        .style("font-size", "12px")
+                        .style("font-style", "italic")
+                        .text("PHEV");
+
+                    tooltip.append("text")
+                        .attr("class", "evlgd")
+                        .attr("fill", "#e3e3e3")
+                        .attr("x", "90%")
+                        .attr("y", "86%")
+                        .attr("text-anchor", "middle")
+                        .attr("dominant-baseline", "middle")
+                        .style("font-family", "Helvetica")
+                        .style("font-size", "12px")
+                        .style("font-style", "italic")
+                        .text("BEV");
+                    
+                    tooltip.append("rect")
+                        .attr("class", "evbar-phev")
+                        .attr("fill", "#4292c6")
+                        .attr("x", "20%")
+                        .attr("y", "82%")
+                        .attr("height", "7%")
+                        .attr('width', PHEV_pct * (0.63) + "%");
+                    
+                    tooltip.append("rect")
+                        .attr("class", "evbar-bev")
+                        .attr("fill", "green")
+                        .attr("x", (20 + (PHEV_pct * (0.63)) + "%"))
+                        .attr("y", "82%")
+                        .attr("height", "7%")
+                        .attr("width", BEV_pct * (0.63) + "%");
+
+                    tooltip.append("text")
+                        .attr("class", "evlgd")
+                        .attr("fill", "#e3e3e3")
+                        .attr("x", "25%")
+                        .attr("y", "86%")
+                        .attr("text-anchor", "middle")
+                        .attr("dominant-baseline", "middle")
+                        .style("font-family", "Helvetica")
+                        .style("font-size", "12px")
+                        .style("font-style", "italic")
+                        .text(PHEV_pct + "%");
+                    
+                    tooltip.append("text")
+                        .attr("class", "evlgd")
+                        .attr("fill", "#e3e3e3")
+                        .attr("x", "75%")
+                        .attr("y", "86%")
+                        .attr("text-anchor", "left")
+                        .attr("dominant-baseline", "middle")
+                        .style("font-family", "Helvetica")
+                        .style("font-size", "12px")
+                        .style("font-style", "italic")
+                        .text(BEV_pct + "%");
+
+
+
+                    
                 }
                 updateBarChart();
                 
@@ -451,8 +586,7 @@
                         
                         hcpName.text(zoneName + " County");
                         hcpTotal.text(zoneTotal + " total cars");
-                        chartTitle.text("Click on a region to view top makes!");
-                        
+                        chartTitle.text("Click on a region to view more information!");
                     } else {
                         let zoneName = zone.datum().properties["ZCTA5CE10"]
                         let zoneTotal = zone.datum().properties.total;
@@ -461,7 +595,7 @@
                         hcpName.text("ZIP " + zoneName);
                         hcpZipCountyCity.text(moreinfo);
                         hcpTotal.text(zoneTotal + " total cars");
-                        chartTitle.text("Click on a region to view top makes!");
+                        chartTitle.text("Click on a region to view more information!");
                     }
 
                     zone.transition()
@@ -483,6 +617,12 @@
                     barchart.selectAll("*").remove();
 
                     chartTitle.text("");
+
+                    tooltip.selectAll(".stats").remove();
+                    tooltip.selectAll(".evbar-bev").remove();
+                    tooltip.selectAll(".evbar-phev").remove();
+                    tooltip.selectAll(".evlgd").remove();
+
                 }
 
                 d3.select("#countyview")
@@ -605,6 +745,44 @@
                                 .style("font-family", "Helvetica")
                                 .style("font-size", "15px");
                         }
+
+                        legend.append("line")
+                            .style("stroke", "gold")
+                            .style("stroke-width", 2)
+                            .attr("x1", 0)
+                            .attr("x2", 15)
+                            .attr("y1", 212)
+                            .attr("y2", 197);
+
+                        legend.append("text")
+                            .style("fill", "gold")
+                            .attr("x", 5 + legend_size * 1.2)
+                            .attr("y", 212)
+                            .attr("text-anchor", "left")
+                            .style("alignment-baseline", "middle")
+                            .style("font-family", "Helvetica")
+                            .style("font-size", "15px")
+                            .text("State routes/major roads");
+
+                        legend.append("circle")
+                            .attr("r", 4)
+                            .attr('fill', "green") // AKS : change color ?
+                            .attr("stroke", "#0e1524") // AKS : do we like this ?
+                            .attr("stroke-width", 0.25) // AKS : do we like this? 
+                            .attr("opacity", 0.5)
+                            .attr("cx", 7)
+                            .attr("cy", 235);
+                        
+                        legend.append("text")
+                            .style("fill", "green")
+                            .attr("x", 5 + legend_size * 1.2)
+                            .attr("y", 240)
+                            .attr("text-anchor", "left")
+                            .style("alignment-baseline", "middle")
+                            .style("font-family", "Helvetica")
+                            .style("font-size", "15px")
+                            .text("EV charging stations");
+                        
                     }
                     
                     updateMap(toggle);
